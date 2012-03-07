@@ -2,6 +2,7 @@
 <html>
  <head>
   <title>Render trace visualizer</title>
+  <script src="raphael-min.js"></script>
   <script>
     CANVAS_USE_RATIO = 0.75;
     FRAME_INTERVAL_MS = 50;
@@ -34,7 +35,7 @@
         currentElement = this;
         do{
             if (currentElement.scrollLeft != null) {
-                dump(currentElement.tagName + " " + currentElement.scrollLeft + "\n");
+                log(currentElement.tagName + " " + currentElement.scrollLeft + "\n");
                 totalOffsetX -= currentElement.scrollLeft;
             }
         }
@@ -47,10 +48,12 @@
     }
     HTMLCanvasElement.prototype.relMouseCoords = relMouseCoords;
 
-    function log(x) {
-        if (console) {
-            console.log(x);
-        }
+    HTMLDivElement.prototype.relMouseCoords = relMouseCoords;//function (event) { return {x:this.event.clientX, y:event.clientY} };
+
+    if (console) {
+        log = console.log;
+    } else {
+        log = function () {};
     }
 
     // parses the lines in the textarea, ignoring anything that doesn't have RENDERTRACE.
@@ -87,7 +90,10 @@
                 continue;
             }
 
-            var timestamp = parseInt(tokens[j++]);
+            var timestamp = parseInt(tokens[j++])/100;
+            if (renderData.length % 100 == 0)
+               log("parseInt: " + timestamp + " : " + renderData.length);
+
             var destIndex = renderData.length;
             if (destIndex == 0) {
                 // create the initial frame
@@ -166,28 +172,36 @@
         }
     }
 
+    built = undefined;
     function renderTimeline() {
+        if (built != true) {
+            buildTimeline();
+            built = true;
+        }
+          
+    }
+    function buildTimeline() {
         if (renderData.length < 1) return;
-
         var timeStart = renderData[0].timestamp;
         var timeEnd = renderData[renderData.length-1].timestamp;
         var duration = Math.ceil((timeEnd - timeStart)/1000) * 1000 + 100;
-        var cursor = currentFrameTime - timeStart;
-
-        var canvas = document.getElementById('timeline');
-        if (! canvas.getContext) {
-            log("No canvas context");
-        }
-        var pixelsPerSecond = 500;
+        var cursorOffset = currentFrameTime - timeStart;
+        var canvas = document.getElementById("timeline");
+        const pixelsPerSecond = 1000;
         canvas.width = duration / 1000 * pixelsPerSecond;
+        canvas.height = 800
+        var r = Raphael("timeline", canvas.width, canvas.height);
 
+
+/*
         canvas.onmousedown = function(e) {
             canvas.isDragging = true;
             var clickX = canvas.relMouseCoords(e).x;
             currentFrameTime = timeStart + clickX / pixelsPerSecond * 1000;
+            cursorOffset = currentFrameTime - timeStart;
+            cursor.transform("t" + (cursorOffset / 1000 * pixelsPerSecond) + ",0");
             renderFrame();
         }
-
         canvas.onmouseup = function(e) {
             canvas.isDragging = false;
         }
@@ -196,17 +210,19 @@
             if (canvas.isDragging != true) return;
             var clickX = canvas.relMouseCoords(e).x;
             currentFrameTime = timeStart + clickX / pixelsPerSecond * 1000;
+            cursorOffset = currentFrameTime - timeStart;
+            cursor.transform("t" + (cursorOffset / 1000 * pixelsPerSecond) + ",0");
             renderFrame();
         }
-
-        var context = canvas.getContext('2d');
+*/
+        /*var context = canvas.getContext('2d');
         context.setTransform(1,0,0,1,0,0);
 
         context.strokeStyle = 'black';
         for(var i = 0; i < duration; i+=1000) {
-            context.fillText(Math.round(i/1000) + " ms", i/1000 * pixelsPerSecond, 15);
-        }
-
+            //context.fillText(Math.round(i/1000) + " ms", i/1000 * pixelsPerSecond, 15);
+        }*/
+        /*
         context.strokeStyle = 'gray';
         context.lineWidth = 1;
         for(var i = 0; i < renderData.length; i++) {
@@ -216,7 +232,7 @@
             context.lineTo(time / 1000 * pixelsPerSecond, canvas.height);
             context.closePath();
             context.stroke();
-        }
+        }*/
 
         var colorToRow = {};
         var nextRow = 0;
@@ -235,21 +251,25 @@
                             colorToRow[j] = row;
                         }
 
-                        context.fillStyle = j;
-                        context.fillRect(startTime / 1000 * pixelsPerSecond, 30 + row * 20, (endTime - startTime) / 1000 * pixelsPerSecond, 10);
+                        r.rect(startTime / 1000 * pixelsPerSecond, 30 + row * 20, (endTime - startTime) / 1000 * pixelsPerSecond, 10).attr(
+                        {fill: j})
+                        .click(function (e) {alert(e.target.width.baseVal.value * (1000 / pixelsPerSecond)  + "ms")});
                         
                     }
                 }
             }
         }
 
+        cursor = r.path("M" + 0 + " " + 15 +
+               "L" + 0 + " " + canvas.height).attr({stroke: "green", "stroke-width": 2});
+        /*
         context.strokeStyle = 'green';
         context.lineWidth = 2;
         context.beginPath();
         context.moveTo(cursor / 1000 * pixelsPerSecond, 15);
         context.lineTo(cursor / 1000 * pixelsPerSecond, canvas.height);
         context.closePath();
-        context.stroke();
+        context.stroke();*/
 
     }
 
@@ -268,10 +288,10 @@
                 currentFrame = renderData.length-1;
             }
         }
-        dump(currentFrameTime + "\n");
+        log(currentFrameTime + " - " + currentFrame + "\n");
         var frame = currentFrame;
         if (frame < 0 || frame >= renderData.length) {
-            log("Invalid frame index");
+            log("Invalid frame index: " + frame + " length: " + renderData.length);
             return false;
         }
 
@@ -316,7 +336,7 @@
                 clearTimeout(canvas.zoomRepaintTimeout);
             }
             canvas.zoomRepaintTimeout = setTimeout(renderFrame, 15);
-            dump(canvas.zoomLevel + "\n");
+            log(canvas.zoomLevel + "\n");
         }, false);  
         canvas.DOMMouseScroll = function(e) { alert("hey"); }
 
@@ -960,8 +980,8 @@ SHADOW RENDERTRACE 2361305538 rect #130000 12 35 20 20
     <button onclick="step(false)">&gt;</button>
     <button onclick="reset(false)">&raquo;</button>
    </div>
-   <div style="height: 100px; overflow:scroll;">
-     <canvas id="timeline" width="100" height="200">Canvas not supported!</canvas>
+   <div style="height: 500px; overflow:scroll;">
+     <div id="timeline"></div>
    </div>
   </div>
   <canvas id="canvas" width="700" height="600" style="border: solid 1px black; float: left">Canvas not supported!</canvas>
