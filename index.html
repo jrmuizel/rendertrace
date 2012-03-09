@@ -47,10 +47,10 @@
     }
     HTMLCanvasElement.prototype.relMouseCoords = relMouseCoords;
 
-    function log(x) {
-        if (console) {
-            console.log(x);
-        }
+    if (console) {
+        log = console.log;
+    } else {
+        log = function() { }
     }
 
     // parses the lines in the textarea, ignoring anything that doesn't have RENDERTRACE.
